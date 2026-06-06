@@ -4,14 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Simulation Lab v2.2</title>
+    <!-- Tailwind CSS 직접 로드 -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome 아이콘 직접 로드 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
         :root { --bg: #05070a; --card: #0f172a; --primary: #3b82f6; }
-        body { background-color: var(--bg); color: #e2e8f0; font-family: 'Inter', sans-serif; overflow: hidden; }
+        body { background-color: var(--bg); color: #e2e8f0; font-family: 'Inter', sans-serif; margin: 0; padding: 0; overflow: hidden; }
         .mono { font-family: 'JetBrains Mono', monospace; }
         
+        /* 레이아웃 강제 고정 (Tailwind가 안먹힐 경우 대비) */
+        .main-container { display: flex; height: 100vh; width: 100vw; }
+        .sidebar { width: 320px; background: #0f172a; border-right: 1px solid #1e293b; display: flex; flex-direction: column; padding: 24px; z-index: 50; }
+        .content { flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #070b14; position: relative; }
+
         .grid-box { 
             display: grid; 
             grid-template-columns: repeat(41, 20px); 
@@ -19,94 +26,86 @@
             gap: 1px; 
             background-color: #1e293b;
             border: 4px solid #1e293b;
+            box-shadow: 0 0 50px rgba(0,0,0,0.5);
         }
-        .node { width: 20px; height: 20px; background-color: #0f172a; transition: background 0.1s; }
-        .node-wall { background-color: #475569; animation: wallPop 0.2s forwards; }
+        .node { width: 20px; height: 20px; background-color: #0f172a; }
+        .node-wall { background-color: #475569; }
         .node-start { background-color: #10b981 !important; box-shadow: 0 0 15px #10b981; }
         .node-end { background-color: #ef4444 !important; box-shadow: 0 0 15px #ef4444; }
-        .node-visited { background-color: rgba(59, 130, 246, 0.4); animation: visit 0.3s forwards; }
-        .node-path { background-color: #fbbf24; box-shadow: 0 0 15px #fbbf24; z-index: 5; animation: path 0.3s forwards; }
+        .node-visited { background-color: rgba(59, 130, 246, 0.4); }
+        .node-path { background-color: #fbbf24; box-shadow: 0 0 15px #fbbf24; z-index: 5; }
         
-        @keyframes wallPop { 0% { transform: scale(0.2); } 100% { transform: scale(1); } }
-        @keyframes visit { 0% { transform: scale(0.3); border-radius: 50%; } 100% { transform: scale(1); } }
-        @keyframes path { 0% { transform: scale(1.4); } 100% { transform: scale(1); } }
-
-        .sidebar { background: rgba(15, 23, 42, 0.9); backdrop-filter: blur(10px); border-right: 1px solid #1e293b; }
-        .btn { transition: all 0.2s; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .btn { cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        input[type=range] { cursor: pointer; }
     </style>
 </head>
-<body class="h-screen flex">
+<body>
 
-    <aside class="w-80 sidebar flex flex-col p-6 z-20 shadow-2xl">
-        <div class="mb-6 text-center">
-            <h1 class="text-xl font-black text-blue-500 italic tracking-tighter">AI SEARCH LAB <span class="text-[10px] bg-blue-500 text-white px-1 rounded not-italic">v2.2</span></h1>
-            <p class="text-[9px] text-gray-500 mono tracking-[0.2em] mt-1 uppercase">Speed & Pause Control</p>
-        </div>
+    <div class="main-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="mb-6 text-center">
+                <h1 class="text-xl font-extrabold text-blue-500 italic tracking-tighter">AI SEARCH LAB <span class="text-[10px] bg-blue-500 text-white px-1 rounded not-italic">v2.2</span></h1>
+                <p class="text-[9px] text-gray-500 mono tracking-[0.2em] mt-1 uppercase text-center">Speed & Pause Control</p>
+            </div>
 
-        <div class="space-y-4 overflow-y-auto pr-2">
-            <section>
-                <label class="text-[10px] font-bold text-gray-400 uppercase mb-2 block">Algorithm Engine</label>
-                <select id="algo" class="w-full bg-slate-900 border border-slate-700 p-2.5 rounded text-sm text-blue-300 outline-none">
-                    <option value="astar">A* Search (Optimal)</option>
-                    <option value="dfs">DFS (Deep Exploration)</option>
-                    <option value="bfs">BFS (Shortest Path)</option>
-                </select>
-            </section>
+            <div class="space-y-4 overflow-y-auto pr-1">
+                <section>
+                    <label class="text-[10px] font-bold text-gray-400 uppercase mb-2 block">Algorithm Engine</label>
+                    <select id="algo" class="w-full bg-slate-900 border border-slate-700 p-2.5 rounded text-sm text-blue-300 outline-none">
+                        <option value="astar">A* Search (Optimal)</option>
+                        <option value="dfs">DFS (Deep Exploration)</option>
+                        <option value="bfs">BFS (Shortest Path)</option>
+                    </select>
+                </section>
 
-            <section>
-                <label class="text-[10px] font-bold text-gray-400 uppercase mb-2 block">Map Tools</label>
-                <button onclick="genPerfectMaze()" class="w-full btn bg-indigo-600 hover:bg-indigo-500 text-white text-xs py-2.5 rounded font-bold mb-2">
-                    <i class="fas fa-project-diagram"></i> GENERATE SOLVABLE MAZE
-                </button>
-                <div class="grid grid-cols-2 gap-2">
-                    <button onclick="resetGrid()" class="btn bg-slate-800 hover:bg-slate-700 py-2 rounded text-[10px]">RESET ALL</button>
-                    <button onclick="clearWalls()" class="btn bg-slate-800 hover:bg-slate-700 py-2 rounded text-[10px]">CLEAR WALLS</button>
-                </div>
-            </section>
+                <section>
+                    <label class="text-[10px] font-bold text-gray-400 uppercase mb-2 block">Map Tools</label>
+                    <button onclick="genPerfectMaze()" class="w-full btn bg-indigo-600 hover:bg-indigo-500 text-white text-xs py-2.5 rounded font-bold mb-2">
+                        <i class="fas fa-project-diagram"></i> GENERATE SOLVABLE MAZE
+                    </button>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="resetGrid()" class="btn bg-slate-800 hover:bg-slate-700 py-2 rounded text-[10px] text-white">RESET ALL</button>
+                        <button onclick="clearWalls()" class="btn bg-slate-800 hover:bg-slate-700 py-2 rounded text-[10px] text-white">CLEAR WALLS</button>
+                    </div>
+                </section>
 
-            <hr class="border-slate-800">
+                <hr class="border-slate-800">
 
-            <!-- 핵심 컨트롤 버튼 -->
-            <div class="flex flex-col gap-2">
-                <button id="btn-control" onclick="toggleSim()" class="btn bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-bold text-white shadow-lg shadow-blue-900/40 text-sm">
+                <button id="btn-control" onclick="toggleSim()" class="w-full btn bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-bold text-white shadow-lg text-sm">
                     <i id="icon-control" class="fas fa-play"></i> <span id="text-control">START RESEARCH</span>
                 </button>
-            </div>
 
-            <section class="bg-black/40 p-4 rounded-xl border border-slate-800 space-y-3">
-                <div class="flex justify-between items-center">
-                    <span class="text-[10px] text-gray-500 mono uppercase font-bold">Current Status</span>
-                    <span id="status" class="text-[10px] font-bold text-green-400 mono italic uppercase">Ready</span>
+                <section class="bg-black/40 p-4 rounded-xl border border-slate-800 space-y-3">
+                    <div class="flex justify-between items-center text-[10px]">
+                        <span class="text-gray-500 mono font-bold uppercase">Status</span>
+                        <span id="status" class="font-bold text-green-400 mono italic uppercase">Ready</span>
+                    </div>
+                    <div class="flex justify-between items-center text-[10px]">
+                        <span class="text-gray-500 mono font-bold uppercase">Sim Time</span>
+                        <p id="timer" class="text-xl font-black text-white mono tracking-tighter">00:00<span class="text-xs text-gray-500">.0</span></p>
+                    </div>
+                </section>
+
+                <div id="log" class="text-[10px] mono bg-black/20 p-3 rounded h-32 overflow-y-auto text-blue-400/70 border border-slate-800 leading-relaxed">
+                    > Lab environment ready.<br>> Maze generation: Randomized Prim's.
                 </div>
-                <div class="flex justify-between items-center">
-                    <span class="text-[10px] text-gray-500 mono uppercase font-bold">Sim Time</span>
-                    <p id="timer" class="text-xl font-black text-white mono tracking-tighter">00:00<span class="text-xs text-gray-500">.0</span></p>
+            </div>
+        </aside>
+
+        <!-- Main View -->
+        <main class="content">
+            <div id="grid" class="grid-box"></div>
+            
+            <div class="mt-10 flex flex-col items-center gap-3 bg-slate-900/90 p-5 rounded-3xl border border-white/10 shadow-2xl backdrop-blur-xl">
+                <div class="flex justify-between w-full px-1">
+                    <span class="text-[10px] font-bold text-blue-400 uppercase tracking-widest">Simulation Speed</span>
+                    <span class="text-[10px] font-bold text-white mono"><span id="speedVal">20</span>ms delay</span>
                 </div>
-            </section>
-
-            <div id="log" class="text-[10px] mono bg-black/20 p-3 rounded h-32 overflow-y-auto text-blue-400/70 border border-slate-800 leading-relaxed">
-                > Lab environment ready.<br>> Maze generation: Randomized Prim's.
+                <input type="range" id="speed" min="1" max="300" value="20" class="w-80 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500" dir="rtl">
             </div>
-        </div>
-    </aside>
-
-    <main class="flex-grow flex flex-col items-center justify-center relative bg-[#070b14]">
-        <!-- 그리드 영역 -->
-        <div id="grid" class="grid-box shadow-2xl"></div>
-        
-        <!-- 실시간 속도 조절 슬라이더 -->
-        <div class="absolute bottom-10 flex flex-col items-center gap-3 bg-slate-900/90 p-5 rounded-3xl border border-white/10 shadow-2xl backdrop-blur-xl">
-            <div class="flex justify-between w-full px-1">
-                <span class="text-[10px] font-bold text-blue-400 uppercase tracking-widest">Simulation Speed</span>
-                <span class="text-[10px] font-bold text-white mono"><span id="speedVal">20</span>ms delay</span>
-            </div>
-            <input type="range" id="speed" min="1" max="300" value="20" class="w-80 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500" dir="rtl">
-            <div class="flex justify-between w-full text-[9px] text-gray-500 px-1 font-bold uppercase">
-                <span>Fast</span>
-                <span>Slow</span>
-            </div>
-        </div>
-    </main>
+        </main>
+    </div>
 
     <script>
         const ROWS = 25; const COLS = 41;
@@ -114,13 +113,10 @@
         let isMouseDown = false;
         let startPos = [1, 1];
         let endPos = [23, 39];
-        
-        let simState = 'IDLE'; // IDLE, RUNNING, PAUSED
+        let simState = 'IDLE'; 
         let timerInterval;
         let startTime;
         let elapsedAtPause = 0;
-
-        // 알고리즘 추적 변수 (중간 멈춤 및 재개용)
         let openSet = [];
         let found = false;
 
@@ -145,7 +141,6 @@
         }
 
         function toggleWall(r, c) {
-            // 시작점이나 끝점은 벽으로 만들 수 없음
             if ((r === startPos[0] && c === startPos[1]) || (r === endPos[0] && c === endPos[1])) return;
             gridData[r][c].wall = !gridData[r][c].wall;
             document.getElementById(`n-${r}-${c}`).classList.toggle('node-wall');
@@ -162,7 +157,6 @@
             }
         }
 
-        // --- 알고리즘 제어 로직 (핵심) ---
         async function toggleSim() {
             if (simState === 'IDLE') {
                 prepareSim();
@@ -176,7 +170,6 @@
                 updateControlUI();
                 clearInterval(timerInterval);
                 elapsedAtPause += (Date.now() - startTime);
-                log("Simulation paused. You can edit walls.");
             } else if (simState === 'PAUSED') {
                 simState = 'RUNNING';
                 updateControlUI();
@@ -191,32 +184,30 @@
             const text = document.getElementById('text-control');
             const icon = document.getElementById('icon-control');
             const status = document.getElementById('status');
-
             if (simState === 'RUNNING') {
-                btn.className = "btn bg-amber-600 hover:bg-amber-500 py-4 rounded-xl font-bold text-white shadow-lg text-sm";
+                btn.classList.replace('bg-blue-600', 'bg-amber-600');
                 text.innerText = "PAUSE RESEARCH";
                 icon.className = "fas fa-pause";
                 status.innerText = "Exploring...";
-                status.className = "text-[10px] font-bold text-yellow-400 mono italic uppercase";
+                status.classList.replace('text-green-400', 'text-yellow-400');
             } else if (simState === 'PAUSED') {
-                btn.className = "btn bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-bold text-white shadow-lg text-sm";
+                btn.classList.replace('bg-amber-600', 'bg-blue-600');
                 text.innerText = "RESUME RESEARCH";
                 icon.className = "fas fa-play";
                 status.innerText = "Paused";
-                status.className = "text-[10px] font-bold text-blue-400 mono italic uppercase";
+                status.classList.replace('text-yellow-400', 'text-blue-400');
             } else {
-                btn.className = "btn bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-bold text-white shadow-lg text-sm";
+                btn.className = "w-full btn bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-bold text-white text-sm";
                 text.innerText = "START RESEARCH";
                 icon.className = "fas fa-play";
                 status.innerText = "Ready";
-                status.className = "text-[10px] font-bold text-green-400 mono italic uppercase";
+                status.className = "font-bold text-green-400 mono italic uppercase";
             }
         }
 
         function prepareSim() {
             found = false;
             elapsedAtPause = 0;
-            // 화면 초기화
             for(let r=0; r<ROWS; r++){
                 for(let c=0; c<COLS; c++){
                     gridData[r][c].g = Infinity;
@@ -229,13 +220,11 @@
             startNode.g = 0;
             startNode.f = heuristic(startNode, gridData[endPos[0]][endPos[1]]);
             openSet = [startNode];
-            log("Algorithm initialized.");
         }
 
         async function runAlgorithm() {
             const algo = document.getElementById('algo').value;
             const endNode = gridData[endPos[0]][endPos[1]];
-
             while (openSet.length > 0 && simState === 'RUNNING') {
                 let current;
                 if (algo === 'astar') {
@@ -243,23 +232,14 @@
                     openSet = openSet.filter(n => n !== current);
                 } else if (algo === 'bfs') {
                     current = openSet.shift();
-                } else { // DFS
-                    current = openSet.pop();
-                }
+                } else { current = openSet.pop(); }
 
                 if (current.visited) continue;
                 current.visited = true;
-
-                if (current === endNode) {
-                    found = true;
-                    finishSim(true);
-                    return;
-                }
-
+                if (current === endNode) { found = true; finishSim(true); return; }
                 if (current !== gridData[startPos[0]][startPos[1]]) {
                     document.getElementById(`n-${current.r}-${current.c}`).classList.add('node-visited');
                 }
-
                 const neighbors = getNeighbors(current);
                 for (let neighbor of neighbors) {
                     if (neighbor.wall || neighbor.visited) continue;
@@ -271,15 +251,9 @@
                         openSet.push(neighbor);
                     }
                 }
-                
-                // 실시간 속도 조절: 슬라이더 값을 매 루프마다 새로 가져옴
-                const delay = parseInt(document.getElementById('speed').value);
-                await new Promise(r => setTimeout(r, delay));
+                await new Promise(r => setTimeout(r, parseInt(document.getElementById('speed').value)));
             }
-
-            if (openSet.length === 0 && !found && simState !== 'PAUSED') {
-                finishSim(false);
-            }
+            if (openSet.length === 0 && !found && simState !== 'PAUSED') { finishSim(false); }
         }
 
         async function finishSim(success) {
@@ -287,19 +261,15 @@
             updateControlUI();
             clearInterval(timerInterval);
             if (success) {
-                log("Target acquired. Plotting optimal path...");
                 let curr = gridData[endPos[0]][endPos[1]].parent;
                 while(curr && curr.parent) {
                     document.getElementById(`n-${curr.r}-${curr.c}`).classList.add('node-path');
                     curr = curr.parent;
                     await new Promise(r => setTimeout(r, 20));
                 }
-            } else {
-                log("Research failed: No available path.");
             }
         }
 
-        // --- 미로 생성 알고리즘 (v2.1과 동일) ---
         function genPerfectMaze() {
             resetGrid();
             for(let r=0; r<ROWS; r++) {
@@ -335,10 +305,8 @@
             gridData[endPos[0]][endPos[1]-1].wall = false;
             document.getElementById(`n-${endPos[0]}-${endPos[1]-1}`).classList.remove('node-wall');
             updateView();
-            log("Perfect maze generated. Connectivity: 100%.");
         }
 
-        // --- 유틸리티 ---
         function startTimer() {
             timerInterval = setInterval(() => {
                 const diff = (Date.now() - startTime) + elapsedAtPause;
@@ -359,9 +327,7 @@
             return res;
         }
 
-        function heuristic(a, b) {
-            return Math.abs(a.r - b.r) + Math.abs(a.c - b.c);
-        }
+        function heuristic(a, b) { return Math.abs(a.r - b.r) + Math.abs(a.c - b.c); }
 
         function log(msg) {
             const logEl = document.getElementById('log');
@@ -375,7 +341,6 @@
             clearInterval(timerInterval);
             document.getElementById('timer').innerHTML = `00:00<span class="text-xs text-gray-500">.0</span>`;
             init();
-            log("System reset complete.");
         }
 
         function clearWalls() {
@@ -385,7 +350,6 @@
                     document.getElementById(`n-${r}-${c}`).classList.remove('node-wall');
                 }
             }
-            log("All obstacles removed.");
         }
 
         document.getElementById('speed').oninput = (e) => {
