@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Simulation Lab v2.2</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+        :root { --bg: #05070a; --card: #0f172a; --primary: #3b82f6; }
+        body { background-color: var(--bg); color: #e2e8f0; font-family: 'Inter', sans-serif; overflow: hidden; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        
+        .grid-box { 
+            display: grid; 
+            grid-template-columns: repeat(41, 20px); 
+            grid-template-rows: repeat(25, 20px); 
+            gap: 1px; 
+            background-color: #1e293b;
+            border: 4px solid #1e293b;
+        }
+        .node { width: 20px; height: 20px; background-color: #0f172a; transition: background 0.1s; }
+        .node-wall { background-color: #475569; animation: wallPop 0.2s forwards; }
+        .node-start { background-color: #10b981 !important; box-shadow: 0 0 15px #10b981; }
+        .node-end { background-color: #ef4444 !important; box-shadow: 0 0 15px #ef4444; }
+        .node-visited { background-color: rgba(59, 130, 246, 0.4); animation: visit 0.3s forwards; }
+        .node-path { background-color: #fbbf24; box-shadow: 0 0 15px #fbbf24; z-index: 5; animation: path 0.3s forwards; }
+        
+        @keyframes wallPop { 0% { transform: scale(0.2); } 100% { transform: scale(1); } }
+        @keyframes visit { 0% { transform: scale(0.3); border-radius: 50%; } 100% { transform: scale(1); } }
+        @keyframes path { 0% { transform: scale(1.4); } 100% { transform: scale(1); } }
+
+        .sidebar { background: rgba(15, 23, 42, 0.9); backdrop-filter: blur(10px); border-right: 1px solid #1e293b; }
+        .btn { transition: all 0.2s; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    </style>
+</head>
+<body class="h-screen flex">
+
+    <aside class="w-80 sidebar flex flex-col p-6 z-20 shadow-2xl">
+        <div class="mb-6 text-center">
+            <h1 class="text-xl font-black text-blue-500 italic tracking-tighter">AI SEARCH LAB <span class="text-[10px] bg-blue-500 text-white px-1 rounded not-italic">v2.2</span></h1>
+            <p class="text-[9px] text-gray-500 mono tracking-[0.2em] mt-1 uppercase">Speed & Pause Control</p>
+        </div>
+
+        <div class="space-y-4 overflow-y-auto pr-2">
+            <section>
+                <label class="text-[10px] font-bold text-gray-400 uppercase mb-2 block">Algorithm Engine</label>
+                <select id="algo" class="w-full bg-slate-900 border border-slate-700 p-2.5 rounded text-sm text-blue-300 outline-none">
+                    <option value="astar">A* Search (Optimal)</option>
+                    <option value="dfs">DFS (Deep Exploration)</option>
+                    <option value="bfs">BFS (Shortest Path)</option>
+                </select>
+            </section>
+
+            <section>
+                <label class="text-[10px] font-bold text-gray-400 uppercase mb-2 block">Map Tools</label>
+                <button onclick="genPerfectMaze()" class="w-full btn bg-indigo-600 hover:bg-indigo-500 text-white text-xs py-2.5 rounded font-bold mb-2">
+                    <i class="fas fa-project-diagram"></i> GENERATE SOLVABLE MAZE
+                </button>
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="resetGrid()" class="btn bg-slate-800 hover:bg-slate-700 py-2 rounded text-[10px]">RESET ALL</button>
+                    <button onclick="clearWalls()" class="btn bg-slate-800 hover:bg-slate-700 py-2 rounded text-[10px]">CLEAR WALLS</button>
+                </div>
+            </section>
+
+            <hr class="border-slate-800">
+
+            <!-- 핵심 컨트롤 버튼 -->
+            <div class="flex flex-col gap-2">
+                <button id="btn-control" onclick="toggleSim()" class="btn bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-bold text-white shadow-lg shadow-blue-900/40 text-sm">
+                    <i id="icon-control" class="fas fa-play"></i> <span id="text-control">START RESEARCH</span>
+                </button>
+            </div>
+
+            <section class="bg-black/40 p-4 rounded-xl border border-slate-800 space-y-3">
+                <div class="flex justify-between items-center">
+                    <span class="text-[10px] text-gray-500 mono uppercase font-bold">Current Status</span>
+                    <span id="status" class="text-[10px] font-bold text-green-400 mono italic uppercase">Ready</span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-[10px] text-gray-500 mono uppercase font-bold">Sim Time</span>
+                    <p id="timer" class="text-xl font-black text-white mono tracking-tighter">00:00<span class="text-xs text-gray-500">.0</span></p>
+                </div>
+            </section>
+
+            <div id="log" class="text-[10px] mono bg-black/20 p-3 rounded h-32 overflow-y-auto text-blue-400/70 border border-slate-800 leading-relaxed">
+                > Lab environment ready.<br>> Maze generation: Randomized Prim's.
+            </div>
+        </div>
+    </aside>
+
+    <main class="flex-grow flex flex-col items-center justify-center relative bg-[#070b14]">
+        <!-- 그리드 영역 -->
+        <div id="grid" class="grid-box shadow-2xl"></div>
+        
+        <!-- 실시간 속도 조절 슬라이더 -->
+        <div class="absolute bottom-10 flex flex-col items-center gap-3 bg-slate-900/90 p-5 rounded-3xl border border-white/10 shadow-2xl backdrop-blur-xl">
+            <div class="flex justify-between w-full px-1">
+                <span class="text-[10px] font-bold text-blue-400 uppercase tracking-widest">Simulation Speed</span>
+                <span class="text-[10px] font-bold text-white mono"><span id="speedVal">20</span>ms delay</span>
+            </div>
+            <input type="range" id="speed" min="1" max="300" value="20" class="w-80 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500" dir="rtl">
+            <div class="flex justify-between w-full text-[9px] text-gray-500 px-1 font-bold uppercase">
+                <span>Fast</span>
+                <span>Slow</span>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const ROWS = 25; const COLS = 41;
+        let gridData = [];
+        let isMouseDown = false;
+        let startPos = [1, 1];
+        let endPos = [23, 39];
+        
+        let simState = 'IDLE'; // IDLE, RUNNING, PAUSED
+        let timerInterval;
+        let startTime;
+        let elapsedAtPause = 0;
+
+        // 알고리즘 추적 변수 (중간 멈춤 및 재개용)
+        let openSet = [];
+        let found = false;
+
+        function init() {
+            const gridEl = document.getElementById('grid');
+            gridEl.innerHTML = '';
+            gridData = [];
+            for (let r = 0; r < ROWS; r++) {
+                gridData[r] = [];
+                for (let c = 0; c < COLS; c++) {
+                    const node = document.createElement('div');
+                    node.className = 'node';
+                    node.id = `n-${r}-${c}`;
+                    node.onmousedown = (e) => { e.preventDefault(); isMouseDown = true; toggleWall(r, c); };
+                    node.onmouseenter = () => { if (isMouseDown) toggleWall(r, c); };
+                    node.onmouseup = () => { isMouseDown = false; };
+                    gridEl.appendChild(node);
+                    gridData[r][c] = { r, c, wall: false, g: Infinity, h: Infinity, f: Infinity, parent: null, visited: false };
+                }
+            }
+            updateView();
+        }
+
+        function toggleWall(r, c) {
+            // 시작점이나 끝점은 벽으로 만들 수 없음
+            if ((r === startPos[0] && c === startPos[1]) || (r === endPos[0] && c === endPos[1])) return;
+            gridData[r][c].wall = !gridData[r][c].wall;
+            document.getElementById(`n-${r}-${c}`).classList.toggle('node-wall');
+        }
+
+        function updateView() {
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    const el = document.getElementById(`n-${r}-${c}`);
+                    el.classList.remove('node-start', 'node-end');
+                    if (r === startPos[0] && c === startPos[1]) el.classList.add('node-start');
+                    if (r === endPos[0] && c === endPos[1]) el.classList.add('node-end');
+                }
+            }
+        }
+
+        // --- 알고리즘 제어 로직 (핵심) ---
+        async function toggleSim() {
+            if (simState === 'IDLE') {
+                prepareSim();
+                simState = 'RUNNING';
+                updateControlUI();
+                startTime = Date.now();
+                startTimer();
+                runAlgorithm();
+            } else if (simState === 'RUNNING') {
+                simState = 'PAUSED';
+                updateControlUI();
+                clearInterval(timerInterval);
+                elapsedAtPause += (Date.now() - startTime);
+                log("Simulation paused. You can edit walls.");
+            } else if (simState === 'PAUSED') {
+                simState = 'RUNNING';
+                updateControlUI();
+                startTime = Date.now();
+                startTimer();
+                runAlgorithm();
+            }
+        }
+
+        function updateControlUI() {
+            const btn = document.getElementById('btn-control');
+            const text = document.getElementById('text-control');
+            const icon = document.getElementById('icon-control');
+            const status = document.getElementById('status');
+
+            if (simState === 'RUNNING') {
+                btn.className = "btn bg-amber-600 hover:bg-amber-500 py-4 rounded-xl font-bold text-white shadow-lg text-sm";
+                text.innerText = "PAUSE RESEARCH";
+                icon.className = "fas fa-pause";
+                status.innerText = "Exploring...";
+                status.className = "text-[10px] font-bold text-yellow-400 mono italic uppercase";
+            } else if (simState === 'PAUSED') {
+                btn.className = "btn bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-bold text-white shadow-lg text-sm";
+                text.innerText = "RESUME RESEARCH";
+                icon.className = "fas fa-play";
+                status.innerText = "Paused";
+                status.className = "text-[10px] font-bold text-blue-400 mono italic uppercase";
+            } else {
+                btn.className = "btn bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-bold text-white shadow-lg text-sm";
+                text.innerText = "START RESEARCH";
+                icon.className = "fas fa-play";
+                status.innerText = "Ready";
+                status.className = "text-[10px] font-bold text-green-400 mono italic uppercase";
+            }
+        }
+
+        function prepareSim() {
+            found = false;
+            elapsedAtPause = 0;
+            // 화면 초기화
+            for(let r=0; r<ROWS; r++){
+                for(let c=0; c<COLS; c++){
+                    gridData[r][c].g = Infinity;
+                    gridData[r][c].visited = false;
+                    gridData[r][c].parent = null;
+                    document.getElementById(`n-${r}-${c}`).classList.remove('node-visited', 'node-path');
+                }
+            }
+            let startNode = gridData[startPos[0]][startPos[1]];
+            startNode.g = 0;
+            startNode.f = heuristic(startNode, gridData[endPos[0]][endPos[1]]);
+            openSet = [startNode];
+            log("Algorithm initialized.");
+        }
+
+        async function runAlgorithm() {
+            const algo = document.getElementById('algo').value;
+            const endNode = gridData[endPos[0]][endPos[1]];
+
+            while (openSet.length > 0 && simState === 'RUNNING') {
+                let current;
+                if (algo === 'astar') {
+                    current = openSet.reduce((prev, curr) => prev.f < curr.f ? prev : curr);
+                    openSet = openSet.filter(n => n !== current);
+                } else if (algo === 'bfs') {
+                    current = openSet.shift();
+                } else { // DFS
+                    current = openSet.pop();
+                }
+
+                if (current.visited) continue;
+                current.visited = true;
+
+                if (current === endNode) {
+                    found = true;
+                    finishSim(true);
+                    return;
+                }
+
+                if (current !== gridData[startPos[0]][startPos[1]]) {
+                    document.getElementById(`n-${current.r}-${current.c}`).classList.add('node-visited');
+                }
+
+                const neighbors = getNeighbors(current);
+                for (let neighbor of neighbors) {
+                    if (neighbor.wall || neighbor.visited) continue;
+                    let tentativeG = current.g + 1;
+                    if (tentativeG < neighbor.g) {
+                        neighbor.parent = current;
+                        neighbor.g = tentativeG;
+                        neighbor.f = neighbor.g + (algo === 'astar' ? heuristic(neighbor, endNode) : 0);
+                        openSet.push(neighbor);
+                    }
+                }
+                
+                // 실시간 속도 조절: 슬라이더 값을 매 루프마다 새로 가져옴
+                const delay = parseInt(document.getElementById('speed').value);
+                await new Promise(r => setTimeout(r, delay));
+            }
+
+            if (openSet.length === 0 && !found && simState !== 'PAUSED') {
+                finishSim(false);
+            }
+        }
+
+        async function finishSim(success) {
+            simState = 'IDLE';
+            updateControlUI();
+            clearInterval(timerInterval);
+            if (success) {
+                log("Target acquired. Plotting optimal path...");
+                let curr = gridData[endPos[0]][endPos[1]].parent;
+                while(curr && curr.parent) {
+                    document.getElementById(`n-${curr.r}-${curr.c}`).classList.add('node-path');
+                    curr = curr.parent;
+                    await new Promise(r => setTimeout(r, 20));
+                }
+            } else {
+                log("Research failed: No available path.");
+            }
+        }
+
+        // --- 미로 생성 알고리즘 (v2.1과 동일) ---
+        function genPerfectMaze() {
+            resetGrid();
+            for(let r=0; r<ROWS; r++) {
+                for(let c=0; c<COLS; c++) {
+                    gridData[r][c].wall = true;
+                    document.getElementById(`n-${r}-${c}`).classList.add('node-wall');
+                }
+            }
+            const walls = [];
+            function makePassage(r, c) {
+                gridData[r][c].wall = false;
+                document.getElementById(`n-${r}-${c}`).classList.remove('node-wall');
+                const dirs = [[0,2],[0,-2],[2,0],[-2,0]];
+                for(let [dr, dc] of dirs) {
+                    let nr = r + dr, nc = c + dc;
+                    if(nr>0 && nr<ROWS-1 && nc>0 && nc<COLS-1 && gridData[nr][nc].wall) {
+                        walls.push([r, c, nr, nc]);
+                    }
+                }
+            }
+            makePassage(startPos[0], startPos[1]);
+            while(walls.length > 0) {
+                const randIdx = Math.floor(Math.random() * walls.length);
+                const [r1, c1, r2, c2] = walls.splice(randIdx, 1)[0];
+                if(gridData[r2][c2].wall) {
+                    gridData[(r1+r2)/2][(c1+c2)/2].wall = false;
+                    document.getElementById(`n-${(r1+r2)/2}-${(c1+c2)/2}`).classList.remove('node-wall');
+                    makePassage(r2, c2);
+                }
+            }
+            gridData[endPos[0]][endPos[1]].wall = false;
+            document.getElementById(`n-${endPos[0]}-${endPos[1]}`).classList.remove('node-wall');
+            gridData[endPos[0]][endPos[1]-1].wall = false;
+            document.getElementById(`n-${endPos[0]}-${endPos[1]-1}`).classList.remove('node-wall');
+            updateView();
+            log("Perfect maze generated. Connectivity: 100%.");
+        }
+
+        // --- 유틸리티 ---
+        function startTimer() {
+            timerInterval = setInterval(() => {
+                const diff = (Date.now() - startTime) + elapsedAtPause;
+                const m = Math.floor(diff / 60000).toString().padStart(2, '0');
+                const s = Math.floor((diff % 60000) / 1000).toString().padStart(2, '0');
+                const ms = Math.floor((diff % 1000) / 100);
+                document.getElementById('timer').innerHTML = `${m}:${s}<span class="text-xs text-gray-500">.${ms}</span>`;
+            }, 100);
+        }
+
+        function getNeighbors(node) {
+            const res = [];
+            const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+            for (let [dr, dc] of dirs) {
+                const nr = node.r + dr, nc = node.c + dc;
+                if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) res.push(gridData[nr][nc]);
+            }
+            return res;
+        }
+
+        function heuristic(a, b) {
+            return Math.abs(a.r - b.r) + Math.abs(a.c - b.c);
+        }
+
+        function log(msg) {
+            const logEl = document.getElementById('log');
+            logEl.innerHTML += `> ${msg}<br>`;
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        function resetGrid() {
+            simState = 'IDLE';
+            updateControlUI();
+            clearInterval(timerInterval);
+            document.getElementById('timer').innerHTML = `00:00<span class="text-xs text-gray-500">.0</span>`;
+            init();
+            log("System reset complete.");
+        }
+
+        function clearWalls() {
+            for(let r=0; r<ROWS; r++) {
+                for(let c=0; c<COLS; c++) {
+                    gridData[r][c].wall = false;
+                    document.getElementById(`n-${r}-${c}`).classList.remove('node-wall');
+                }
+            }
+            log("All obstacles removed.");
+        }
+
+        document.getElementById('speed').oninput = (e) => {
+            document.getElementById('speedVal').innerText = e.target.value;
+        };
+
+        init();
+    </script>
+</body>
+</html>
